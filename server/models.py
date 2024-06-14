@@ -82,6 +82,8 @@ class Pet(db.Model, SerializerMixin):
     #     if animal not in ["dog", "cat"]:
     #         raise ValueError("Animal must be either 'dog' or 'cat'")
     #     return animal
+
+    #test
         
     
     
