@@ -1,115 +1,82 @@
 from app import app
 from config import db
-from random import randint, choice as rc
-from datetime import date, time, datetime
-from models import Owner, Pet, Sitter, Visit
+from datetime import date
+from models import User, SalesCall, Rating, Stage, Opportunity, user_opportunity 
 
 if __name__ == '__main__':
     with app.app_context():
         print("Starting seed...")
 
-with app.app_context():
+        # Delete old data
+        print("Deleting data...")
+        db.session.execute(user_opportunity.delete())
+        Opportunity.query.delete()
+        SalesCall.query.delete()
+        Rating.query.delete()
+        Stage.query.delete()
+        User.query.delete()
 
-    print("Deleting owners...")
-    Owner.query.delete()
-    print("Creating owners...")
-    julie = Owner(name="Julie", address='julieaddress', email="julieemail@gmail.com", phone=9785510848)
-    billy = Owner(name="Billy", address="billyaddress", email="billyemail", phone=1111111112)
-    bia = Owner(name="Bia", address="biaaddress2", email="biaemail", phone=1111111113)
-    owners = [julie, billy, bia]
-    db.session.add_all(owners)
-    db.session.commit()
+        db.session.commit()
 
-    print("Deleting pets...")
-    Pet.query.delete()
-    print("Adding pets...")
-    garfield = Pet(name="Garfield", image="https://images.pexels.com/photos/4587955/pexels-photo-4587955.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1", animal="cat", age=3, temperament="lazy", owner_id=julie.id)
-    rose = Pet(name="Rose", image="https://img.freepik.com/free-photo/close-up-portrait-beautiful-cat_23-2149214419.jpg", animal="cat", age=1, temperament="not friendly", owner_id=billy.id)
-    buddy = Pet(name="Buddy", image="https://image.shutterstock.com/image-photo/happy-puppy-dog-smiling-on-260nw-1799966587.jpg", animal="dog", age=11, temperament="friendly", owner_id=billy.id)
-    pets=[garfield, rose, buddy]
-    db.session.add_all(pets)
-    db.session.commit()
+        # Create Users
+        print("Creating users...")
+        users = [
+            User(username="johndoe", email="johndoe@example.com", password_hash="hashedpassword1"),
+            User(username="janedoe", email="janedoe@example.com", password_hash="hashedpassword2"),
+            User(username="jimbeam", email="jimbeam@example.com", password_hash="hashedpassword3")
+        ]
+        db.session.add_all(users)
+        db.session.commit()
 
-    print("Deleting sitters...")
-    Sitter.query.delete()
-    print("Creating sitters...")
-    sitters = [
-        Sitter(
-            name="Jason Vorhees",
-            bio="Great with watching your little ones at a lake",
-            experience=7,
-            image="https://images.nightcafe.studio/jobs/6sLDmT6whBds1MnmQf6y/6sLDmT6whBds1MnmQf6y--1--5hp52_2x.jpg?tr=w-1200,c-at_max",
-            address="12 Crystal Lake, Wantabe, NJ 07050",
-            phone=1111111111,
-            email="jvorheesluvsyou1@madeup.com"
-        ),
-        Sitter(
-            name="Freddy Krueger",
-            bio="Ensures your pets have the best dreams",
-            experience=10,
-            image="https://static1.srcdn.com/wordpress/wp-content/uploads/2016/10/Nightmare-on-Elm-Street-6.jpg",
-            address="1428 Elm Street, Springwood, OH 45459",
-            phone=1111111111,
-            email="fkrueger@nightmares.com"
-        ),
-        Sitter(
-            name="Michael Myers",
-            bio="Silent but always keeps an eye on your pets",
-            experience=8,
-            image="https://coleandmarmalade.com/wp-content/uploads/2022/03/Michael-Meowers-1.jpg",
-            address="45 Lampkin Lane, Haddonfield, IL 60120",
-            phone=1111111111,
-            email="mmyers@halloween.com"
-        ),
-        Sitter(
-            name="Chucky Ray",
-            bio="Great with pets, especially if they like to play",
-            experience=5,
-            image="https://static1.srcdn.com/wordpress/wp-content/uploads/2021/10/Brad-Dourif-as-Chucky-with-Binx-the-Cat-in-Chucky-Episode-1.jpg",
-            address="123 Good Guys St, Hackensack, NJ 07601",
-            phone=1111111111,
-            email="cray@goodguys.com"
-        ),
-        Sitter(
-            name="Norman Bates",
-            bio="Takes care of your pets like they were his own",
-            experience=6,
-            image="https://m.media-amazon.com/images/M/MV5BMWZiYmM3MzItYzFiOC00N2VmLWEwOWQtZTYzYjFmNjZlMWRlL2ltYWdlL2ltYWdlXkEyXkFqcGdeQXVyNzAzMDEzNTI@._V1_.jpg",
-            address="12 Old Highway, Fairvale, CA 93922",
-            phone=1111111111,
-            email="nbates@batesmotel.com"
-        ),
-        Sitter(
-            name="Pennywise Clown",
-            bio="Your pets will float with joy under my care",
-            experience=9,
-            image="https://photos.costume-works.com/full/pennywise_and_his_dog-31298-1.jpg",
-            address="29 Neibolt Street, Derry, ME 04401",
-            phone=1111111111,
-            email="pennywise@it.com"
-        )
-    ]
-    for sitter in sitters:
-        db.session.add(sitter)
-    db.session.commit()
+        # Create Ratings
+        print("Creating ratings...")
+        ratings = [
+            Rating(value="Excellent"),
+            Rating(value="Good"),
+            Rating(value="Average"),
+            Rating(value="Poor")
+        ]
+        db.session.add_all(ratings)
+        db.session.commit()
 
-    print("Deleting visits...")
-    Visit.query.delete()
-    print("Creating visits...")
-    visitA = Visit(visit_notes="Garfield was very sweet today. He ate all his food and I watched him drink some water. We played fetch for a while and cuddled while watching Bridgerton. A great visit!", sitter_id=sitters[0].id, pet_id=garfield.id, owner_id=julie.id, date=date(2024, 1, 2), check_in_time=time(14, 27))
-    visitB = Visit(visit_notes="Garfield was aloof today. I guess we're not friends anymore. I am sad.", sitter_id=sitters[0].id, pet_id=garfield.id, owner_id=julie.id, date=date(2024, 2, 1), check_in_time=time(12, 12))
-    visitC = Visit(visit_notes="Rose was a good girl!", sitter_id=sitters[1].id, pet_id=rose.id, owner_id=billy.id, date=date(2024, 5, 27), check_in_time=time(15, 32))
-    visitD = Visit(visit_notes="Buddy was very bad today. I would like an added tip for the inconvenience.", sitter_id=sitters[2].id, pet_id=buddy.id, owner_id=billy.id, date=date(2024, 6, 15), check_in_time=time(10, 15))
-    visitE = Visit(visit_notes="Nothing to report.", sitter_id=sitters[3].id, pet_id=rose.id, owner_id=billy.id, date=date(2024, 8, 10), check_in_time=time(9, 45))
-    visitF = Visit(visit_notes="Nothing to report.", sitter_id=sitters[4].id, pet_id=buddy.id, owner_id=billy.id, date=date(2024, 9, 20), check_in_time=time(11, 30))
-    visitG = Visit(visit_notes="I adore garfield!", sitter_id=sitters[5].id, pet_id=garfield.id, owner_id=julie.id, date=date(2024, 10, 5), check_in_time=time(14, 0))
-    visits = [visitA, visitB, visitC, visitD, visitE, visitF, visitG]
-    db.session.add_all(visits)
-    db.session.commit()
+        # Create Stages
+        print("Creating stages...")
+        stages = [
+            Stage(name="Initial Contact"),
+            Stage(name="Negotiation"),
+            Stage(name="Proposal Sent"),
+            Stage(name="Closed Deal")
+        ]
+        db.session.add_all(stages)
+        db.session.commit()
 
-    print("Seeding done!")
+        # Create Sales Calls
+        print("Creating sales calls...")
+        sales_calls = [
+            SalesCall(date=date(2024, 1, 1), notes="Great initial call", user_id=users[0].id, rating_id=ratings[0].id, stage_id=stages[0].id),
+            SalesCall(date=date(2024, 1, 2), notes="Follow-up call", user_id=users[1].id, rating_id=ratings[1].id, stage_id=stages[1].id),
+            SalesCall(date=date(2024, 1, 3), notes="Negotiation phase", user_id=users[2].id, rating_id=ratings[2].id, stage_id=stages[2].id),
+            SalesCall(date=date(2024, 1, 4), notes="Closed the deal", user_id=users[0].id, rating_id=ratings[3].id, stage_id=stages[3].id)
+        ]
+        db.session.add_all(sales_calls)
+        db.session.commit()
 
-    
+        # Create Opportunities with sales_call_id
+        print("Creating opportunities...")
+        opportunities = [
+            Opportunity(description="Follow up with ACME Corp.", sales_call_id=sales_calls[0].id),
+            Opportunity(description="Demo with Globex Corporation", sales_call_id=sales_calls[1].id),
+            Opportunity(description="Proposal for Initech", sales_call_id=sales_calls[2].id),
+            Opportunity(description="Close deal with Umbrella Corp.", sales_call_id=sales_calls[3].id)
+        ]
+        db.session.add_all(opportunities)
+        db.session.commit()
 
-    
-    
+        # Establish many-to-many relationships between users and opportunities
+        print("Establishing user-opportunity relationships...")
+        users[0].opportunities = [opportunities[0], opportunities[1]]
+        users[1].opportunities = [opportunities[2]]
+        users[2].opportunities = [opportunities[3]]
+        db.session.commit()
+
+        print("Seeding done!")

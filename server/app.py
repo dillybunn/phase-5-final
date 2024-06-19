@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-from config import *
 import os
-from flask_restful import Resource
-from flask import make_response, jsonify, request
-from models import Owner, Pet, Sitter, Visit, db
-from app import api
+from flask import Flask, make_response, jsonify, request
+from flask_restful import Resource, Api
+from flask_migrate import Migrate
 from flask_cors import CORS
-
+from flask_mail import Mail, Message
+from models import User, SalesCall, Rating, Stage, Opportunity, db
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.environ.get("DB_URI", f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}")
@@ -14,165 +12,212 @@ DATABASE = os.environ.get("DB_URI", f"sqlite:///{os.path.join(BASE_DIR, 'app.db'
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'on', '1']
+app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL', 'false').lower() in ['true', 'on', '1']
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
 app.json.compact = False
 
-migrate = Migrate(app, db)
-
 db.init_app(app)
+migrate = Migrate(app, db)
 CORS(app)
 api = Api(app)
+mail = Mail(app)
 
 @app.route("/")
 def index():
-    return "<h1>Petsitting</h1>"
+    return "<h1>Sales Tracker</h1>"
 
-class Pets(Resource):
+class SalesCalls(Resource):
     def get(self):
-        pets = [pet.to_dict() for pet in Pet.query.all()]
-        return make_response(jsonify(pets), 200)
+        sales_calls = [call.to_dict_custom() for call in SalesCall.query.all()]
+        return make_response(jsonify(sales_calls), 200)
    
     def post(self):
         data = request.get_json()
-        new_pet = Pet(
-            name=data['name'],
-            animal=data['animal'],
-            breed=data['breed'],
-            age=data['age'],
-            temperament=data['temperament'],
-            image=data['image'],
-            owner_id=data['owner_id']
+        new_call = SalesCall(
+            user_id=data['user_id'],
+            date=data['date'],
+            notes=data['notes'],
+            rating_id=data['rating_id'],
+            stage_id=data['stage_id']
         )
-        db.session.add(new_pet)
+        db.session.add(new_call)
         db.session.commit()
-        return make_response(jsonify(new_pet.to_dict()), 201)
-api.add_resource(Pets, '/pets')
+        return make_response(jsonify(new_call.to_dict_custom()), 201)
 
+api.add_resource(SalesCalls, '/sales_calls')
 
-
-
- 
-class PetsById(Resource):
-    
+class SalesCallById(Resource):
     def get(self, id):
-        print(f'Fetching pet with id: {id}')
-        pet = Pet.query.get(id)
-        if pet is None:
-            print("pet not found")
-            return make_response(jsonify(error='Pet not found'), 404)
-        return make_response(jsonify(pet.to_dict()), 200)
+        call = SalesCall.query.get(id)
+        if call is None:
+            return make_response(jsonify(error='Sales Call not found'), 404)
+        return make_response(jsonify(call.to_dict_custom()), 200)
     
     def patch(self, id):
-        pet = Pet.query.get(id)
-        if pet is None:
-            return make_response(jsonify(error='Pet not found'), 404)
+        call = SalesCall.query.get(id)
+        if call is None:
+            return make_response(jsonify(error='Sales Call not found'), 404)
         for attr in request.get_json():
-            setattr(pet, attr, request.get_json()[attr])
+            setattr(call, attr, request.get_json()[attr])
         db.session.commit()
-        return make_response(jsonify(pet.to_dict()), 200)
+        return make_response(jsonify(call.to_dict_custom()), 200)
     
     def delete(self, id):
-        pet = Pet.query.get(id)
-        if pet is None:
-            return make_response(jsonify(error='Pet not found'), 404)
-        db.session.delete(pet)
+        call = SalesCall.query.get(id)
+        if call is None:
+            return make_response(jsonify(error='Sales Call not found'), 404)
+        db.session.delete(call)
         db.session.commit()
         return make_response('', 204)
-        
 
-api.add_resource(PetsById, '/pets/<int:id>')
+api.add_resource(SalesCallById, '/sales_calls/<int:id>')
 
-class Owners(Resource):
+class Users(Resource):
     def get(self):
-        owners = [owner.to_dict() for owner in Owner.query.all()]
-        return make_response(jsonify(owners),200)
+        users = [user.to_dict_custom() for user in User.query.all()]
+        return make_response(jsonify(users), 200)
     
     def post(self):
         data = request.get_json()
-        new_owner = Owner(
-            name=data['name'],
-            address=data['address'],
+        new_user = User(
+            username=data['username'],
             email=data['email'],
-            phone=data['phone']
+            password_hash=data['password_hash']
         )
-        db.session.add(new_owner)
+        db.session.add(new_user)
         db.session.commit()
-        return make_response(jsonify(new_owner.to_dict()), 201)
+        return make_response(jsonify(new_user.to_dict_custom()), 201)
 
-class OwnersById(Resource):
+class UserById(Resource):
     def get(self, id):
-        owner = db.session.get(Owner, id)
-        if not owner:
-            return make_response({"error": "Owner not found"}, 404)
-        return make_response(jsonify(owner.to_dict(only=('id', 'name', 'email', 'phone', 'address', 'pets', 'sitters', "unique_sitters", "visits"))), 200)
-    
-class OwnersByPhone(Resource):
-    def get(self, phone):
-        owner = Owner.query.filter_by(phone=phone).first()
-        if not owner:
-            return make_response({"error": "Owner not found"}, 404)
-        return make_response(jsonify(owner.to_dict()), 200)
+        user = User.query.get(id)
+        if not user:
+            return make_response({"error": "User not found"}, 404)
+        return make_response(jsonify(user.to_dict_custom()), 200)
 
-api.add_resource(Owners, '/owners')
-api.add_resource(OwnersById, '/owners/<int:id>')
-api.add_resource(OwnersByPhone, '/owners/phone/<int:phone>')
+    def patch(self, id):
+        user = User.query.get(id)
+        if not user:
+            return make_response({"error": "User not found"}, 404)
+        for attr in request.get_json():
+            setattr(user, attr, request.get_json()[attr])
+        db.session.commit()
+        return make_response(jsonify(user.to_dict_custom()), 200)
 
-class Sitters(Resource):
+    def delete(self, id):
+        user = User.query.get(id)
+        if not user:
+            return make_response({"error": "User not found"}, 404)
+        db.session.delete(user)
+        db.session.commit()
+        return make_response('', 204)
+
+api.add_resource(Users, '/users')
+api.add_resource(UserById, '/users/<int:id>')
+
+class Ratings(Resource):
     def get(self):
-        sitters = [sitter.to_dict() for sitter in Sitter.query.all()]
-        return make_response(jsonify(sitters), 200)
+        ratings = [rating.to_dict_custom() for rating in Rating.query.all()]
+        return make_response(jsonify(ratings), 200)
     
     def post(self):
         data = request.get_json()
-        new_sitter = Sitter(
-            name=data['name'],
-            address=data['address'],
-            bio=data['bio'],
-            phone=data['phone'],
-            email=data['email'],
-            experience=data['experience'],
-            image=data['image'],
+        new_rating = Rating(
+            value=data['value']
         )
-        db.session.add(new_sitter)
+        db.session.add(new_rating)
         db.session.commit()
-        return make_response(jsonify(new_sitter.to_dict()), 201)
+        return make_response(jsonify(new_rating.to_dict_custom()), 201)
 
-class SitterById(Resource):
+class RatingById(Resource):
     def get(self, id):
-        sitter = db.session.get(Sitter, id)
-        if not sitter:
-            return make_response({"error": "Sitter not found"}, 404)
-        return make_response(jsonify(sitter.to_dict()), 200)
+        rating = Rating.query.get(id)
+        if not rating:
+            return make_response({"error": "Rating not found"}, 404)
+        return make_response(jsonify(rating.to_dict_custom()), 200)
 
-api.add_resource(Sitters, '/sitters')
-api.add_resource(SitterById, '/sitters/<int:id>')
+api.add_resource(Ratings, '/ratings')
+api.add_resource(RatingById, '/ratings/<int:id>')
 
-class Visits(Resource):
+class Stages(Resource):
     def get(self):
-        visits = [visit.to_dict() for visit in Visit.query.all()]
-        return make_response(jsonify(visits), 200)
+        stages = [stage.to_dict_custom() for stage in Stage.query.all()]
+        return make_response(jsonify(stages), 200)
     
     def post(self):
         data = request.get_json()
-        new_visit = Visit(
-            check_in_time=data['check_in_time'],
-            date=data['date'],
-            visit_notes=['visit_notes']
+        new_stage = Stage(
+            name=data['name']
         )
-        db.session.add(new_visit)
+        db.session.add(new_stage)
         db.session.commit()
-        return make_response(jsonify(new_visit.to_dict()), 201)
+        return make_response(jsonify(new_stage.to_dict_custom()), 201)
 
-class VisitById(Resource):
+class StageById(Resource):
     def get(self, id):
-        visit = db.session.get(Visit, id)
-        if not visit:
-            return make_response({"error": "Visit not found"}, 404)
-        return make_response(jsonify(visit.to_dict()), 200)
+        stage = Stage.query.get(id)
+        if not stage:
+            return make_response({"error": "Stage not found"}, 404)
+        return make_response(jsonify(stage.to_dict_custom()), 200)
 
-api.add_resource(Visits, '/visits')
-api.add_resource(VisitById, '/visits/<int:id>')
+api.add_resource(Stages, '/stages')
+api.add_resource(StageById, '/stages/<int:id>')
 
+class Opportunities(Resource):
+    def get(self):
+        opportunities = [opportunity.to_dict_custom() for opportunity in Opportunity.query.all()]
+        return make_response(jsonify(opportunities), 200)
+    
+    def post(self):
+        data = request.get_json()
+        new_opportunity = Opportunity(
+            description=data['description'],
+            sales_call_id=data['sales_call_id']
+        )
+        db.session.add(new_opportunity)
+        db.session.commit()
+        return make_response(jsonify(new_opportunity.to_dict_custom()), 201)
+
+class OpportunityById(Resource):
+    def get(self, id):
+        opportunity = Opportunity.query.get(id)
+        if not opportunity:
+            return make_response({"error": "Opportunity not found"}, 404)
+        return make_response(jsonify(opportunity.to_dict_custom()), 200)
+
+class UserOpportunities(Resource):
+    def post(self, user_id):
+        data = request.get_json()
+        opportunity = Opportunity.query.get(data['opportunity_id'])
+        user = User.query.get(user_id)
+        if not opportunity or not user:
+            return make_response({"error": "User or Opportunity not found"}, 404)
+        user.opportunities.append(opportunity)
+        db.session.commit()
+        return make_response(jsonify(user.to_dict_custom()), 200)
+
+api.add_resource(Opportunities, '/opportunities')
+api.add_resource(OpportunityById, '/opportunities/<int:id>')
+api.add_resource(UserOpportunities, '/users/<int:user_id>/opportunities')
+
+@app.route('/send_email', methods=['POST'])
+def send_email():
+    data = request.get_json()
+    if not data or 'email' not in data or 'subject' not in data or 'body' not in data:
+        return make_response(jsonify({"error": "Invalid request"}), 400)
+    
+    msg = Message(
+        subject=data['subject'],
+        recipients=[data['email']],
+        body=data['body']
+    )
+    mail.send(msg)
+    return make_response(jsonify({"message": "Email sent"}), 200)
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
-

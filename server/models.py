@@ -4,139 +4,137 @@ from sqlalchemy_serializer import SerializerMixin
 from sqlalchemy.ext.hybrid import hybrid_property
 from config import *
 
-class Owner(db.Model, SerializerMixin):
-    __tablename__ = "owners"
+# Association table for the many-to-many relationship between User and Opportunity
+user_opportunity = db.Table('user_opportunity',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('opportunity_id', db.Integer, db.ForeignKey('opportunities.id'), primary_key=True)
+)
+
+class User(db.Model, SerializerMixin):
+    __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    email = db.Column(db.String)
-    phone = db.Column(db.Integer)
-    address = db.Column(db.String)
+    username = db.Column(db.String, unique=True, nullable=False)
+    email = db.Column(db.String, unique=True, nullable=False)
+    password_hash = db.Column(db.String, nullable=False)
 
-    # add relationships test
-    visits = db.relationship("Visit", back_populates="owner")
-    pets = db.relationship("Pet", back_populates="owner")
-    sitters = association_proxy("visits", "sitter")
+    sales_calls = db.relationship("SalesCall", back_populates="user", cascade="all, delete-orphan")
+    opportunities = db.relationship("Opportunity", secondary=user_opportunity, back_populates="users")
 
-    @hybrid_property
-    def unique_sitters(self):
-        sitter_list = [visit.sitter for visit in self.visits]
-        unique_sitter_list = list(set(sitter_list))
-        return unique_sitter_list
-    # add serialization rules
-    serialize_rules = ('-visits.owner', '-pets.owner', 'sitters')
+    serialize_rules = ('-sales_calls.user', '-opportunities.users')
 
-    # add validation
-    @validates("phone")
-    def validate_phone(self, _, phone):
-        if not isinstance(phone, int) or (len(str(phone)) != 10):
-            raise ValueError("Phone must be an integer with 10 characters, no spaces")
-        return phone
+    def to_dict_custom(self, depth=1):
+        if depth <= 0:
+            return {'id': self.id, 'username': self.username, 'email': self.email}
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'sales_calls': [sc.to_dict_custom(depth - 1) for sc in self.sales_calls],
+            'opportunities': [op.to_dict_custom(depth - 1) for op in self.opportunities]
+        }
 
     def __repr__(self):
-        return f"<Owner: {self.name}>"
-    
-class Pet(db.Model, SerializerMixin):
-    __tablename__ = 'pets'
+        return f"<User: {self.username}>"
+
+class SalesCall(db.Model, SerializerMixin):
+    __tablename__ = "sales_calls"
+
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    image = db.Column(db.String)
-    animal = db.Column(db.String)
-    breed = db.Column(db.String)
-    age = db.Column(db.Integer)
-    temperament = db.Column(db.String)
-    owner_id = db.Column(db.Integer, db.ForeignKey('owners.id'), nullable=False)
-    
-    owner = db.relationship('Owner', back_populates='pets')
-    visits = db.relationship('Visit', back_populates='pet')
+    date = db.Column(db.Date, nullable=False)
+    notes = db.Column(db.String)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    rating_id = db.Column(db.Integer, db.ForeignKey("ratings.id"), nullable=False)
+    stage_id = db.Column(db.Integer, db.ForeignKey("stages.id"), nullable=False)
+
+    user = db.relationship("User", back_populates="sales_calls")
+    rating = db.relationship("Rating", back_populates="sales_calls")
+    stage = db.relationship("Stage", back_populates="sales_calls")
+    opportunities = db.relationship("Opportunity", back_populates="sales_call", cascade='all, delete-orphan')
+
+    serialize_rules = ('-user.sales_calls', '-rating.sales_calls', '-stage.sales_calls')
+
+    def to_dict_custom(self, depth=1):
+        if depth <= 0:
+            return {'id': self.id, 'date': self.date, 'notes': self.notes}
+        return {
+            'id': self.id,
+            'date': self.date,
+            'notes': self.notes,
+            'user': self.user.to_dict_custom(depth - 1) if self.user else None,
+            'rating': self.rating.to_dict_custom(depth - 1) if self.rating else None,
+            'stage': self.stage.to_dict_custom(depth - 1) if self.stage else None,
+            'opportunities': [op.to_dict_custom(depth - 1) for op in self.opportunities]
+        }
 
     def __repr__(self):
-        return f'<Pet {self.id}, {self.name}, {self.image}, {self.animal}, {self.breed}, {self.age}, {self.temperament}, Owner: {self.owner_id}>'
+        return f"<SalesCall: {self.date}, User: {self.user_id}, Rating: {self.rating_id}, Stage: {self.stage_id}>"
 
-    serialize_rules = ('-owner.pets', '-visits.pet', '-owner.visits')
-    
-    
-    # validates name to be less than 50 // breaking the edit code
-    
-    # @validates('name')
-    # def validate_name(self, key, name):
-    #     if not name:
-    #         raise ValueError("Pet need a name")
-    #     if len(name) > 50:
-    #         raise ValueError("name too big")
-        
-        
-    # validate age to be only numbers
-    
-    # @validates('age')
-    # def validate_age(self, key, age):
-    #     if not str(age).isnumeric():
-    #         raise ValueError("Age must be a number")
-    #     return age
-    
-    # validate to be only cat or dog. not sure if we want to add that ??
-    
-    # @validates('animal')
-    # def validate_animal(self, key, animal):
-    #     animal = animal.lower()
-    #     if animal not in ["dog", "cat"]:
-    #         raise ValueError("Animal must be either 'dog' or 'cat'")
-    #     return animal
+class Rating(db.Model, SerializerMixin):
+    __tablename__ = "ratings"
 
-    #test
-        
-    
-    
-class Sitter(db.Model, SerializerMixin):
-    __tablename__ = "sitters"
+    id = db.Column(db.Integer, primary_key=True)
+    value = db.Column(db.String, nullable=False)
+
+    sales_calls = db.relationship("SalesCall", back_populates="rating")
+
+    serialize_rules = ('-sales_calls.rating',)
+
+    def to_dict_custom(self, depth=1):
+        if depth <= 0:
+            return {'id': self.id, 'value': self.value}
+        return {
+            'id': self.id,
+            'value': self.value,
+            'sales_calls': [sc.to_dict_custom(depth - 1) for sc in self.sales_calls]
+        }
+
+    def __repr__(self):
+        return f"<Rating: {self.value}>"
+
+class Stage(db.Model, SerializerMixin):
+    __tablename__ = "stages"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
-    bio = db.Column(db.Text, nullable=True)
-    experience = db.Column(db.Integer, nullable=False)
-    image = db.Column(db.String, nullable=True)
-    address = db.Column(db.String, nullable=True)
-    phone = db.Column(db.String, nullable=True)
-    email = db.Column(db.String, nullable=True)
 
-    visits = db.relationship('Visit', back_populates='sitter', cascade='all, delete-orphan')
-    owners = association_proxy('visits', 'owner')
+    sales_calls = db.relationship("SalesCall", back_populates="stage")
 
-    serialize_rules = ('-visits.sitter', '-owners.sitters', '-visits.owner', '-visits.pet')
+    serialize_rules = ('-sales_calls.stage',)
 
-    @validates("phone")
-    def validate_phone(self, _, phone):
-        if not isinstance(phone, int) or (len(str(phone)) != 10):
-            raise ValueError("Phone must be an integer with 10 characters, no spaces")
-        return phone
-    
-    @validates("experience")
-    def validate_experience(self, _, experience):
-        if not isinstance(experience, int) or (experience > 10):
-            raise ValueError("Experience must be an integer between 1 and 10")
-        return experience
-
-def repr(self):
-        return f"<Sitter: {self.name}, Experience: {self.experience} years>"
-
-class Visit(db.Model, SerializerMixin):
-    __tablename__ = "visits"
-
-    id = db.Column(db.Integer, primary_key=True)
-    visit_notes = db.Column(db.String)
-    sitter_id = db.Column(db.Integer, db.ForeignKey("sitters.id"), nullable=False)
-    pet_id = db.Column(db.Integer, db.ForeignKey("pets.id"), nullable=False)
-    owner_id = db.Column(db.Integer, db.ForeignKey("owners.id"), nullable=False)
-    date = db.Column(db.Date)
-    check_in_time = db.Column(db.Time)
-
-    # add relationships
-    owner = db.relationship("Owner", back_populates="visits")
-    sitter = db.relationship("Sitter", back_populates="visits")
-    pet = db.relationship("Pet", back_populates="visits")
-
-    # add serialization rules
-    serialize_rules = ('-owner.visits', '-sitter.visits', '-pet.visits', '-owner.pets', '-sitter.owners')
+    def to_dict_custom(self, depth=1):
+        if depth <= 0:
+            return {'id': self.id, 'name': self.name}
+        return {
+            'id': self.id,
+            'name': self.name,
+            'sales_calls': [sc.to_dict_custom(depth - 1) for sc in self.sales_calls]
+        }
 
     def __repr__(self):
-        return f"<Visit: {self.date}>"
+        return f"<Stage: {self.name}>"
+
+class Opportunity(db.Model, SerializerMixin):
+    __tablename__ = "opportunities"
+
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String, nullable=False)
+    sales_call_id = db.Column(db.Integer, db.ForeignKey("sales_calls.id"), nullable=False)
+
+    sales_call = db.relationship("SalesCall", back_populates="opportunities")
+    users = db.relationship("User", secondary=user_opportunity, back_populates="opportunities")
+
+    serialize_rules = ('-sales_call.opportunities', '-users.opportunities')
+
+    def to_dict_custom(self, depth=1):
+        if depth <= 0:
+            return {'id': self.id, 'description': self.description}
+        return {
+            'id': self.id,
+            'description': self.description,
+            'sales_call': self.sales_call.to_dict_custom(depth - 1) if self.sales_call else None,
+            'users': [user.to_dict_custom(depth - 1) for user in self.users]
+        }
+
+    def __repr__(self):
+        return f"<Opportunity: {self.description}>"
