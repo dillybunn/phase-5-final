@@ -10,6 +10,12 @@ user_opportunity = db.Table('user_opportunity',
     db.Column('opportunity_id', db.Integer, db.ForeignKey('opportunities.id'), primary_key=True)
 )
 
+# Association table for the many-to-many relationship between Customer and Opportunity
+customer_opportunity = db.Table('customer_opportunity',
+    db.Column('customer_id', db.Integer, db.ForeignKey('customers.id'), primary_key=True),
+    db.Column('opportunity_id', db.Integer, db.ForeignKey('opportunities.id'), primary_key=True)
+)
+
 class User(db.Model, SerializerMixin):
     __tablename__ = "users"
 
@@ -37,6 +43,36 @@ class User(db.Model, SerializerMixin):
     def __repr__(self):
         return f"<User: {self.username}>"
 
+class Customer(db.Model, SerializerMixin):
+    __tablename__ = "customers"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False)
+    email = db.Column(db.String, nullable=False)
+    phone = db.Column(db.String, nullable=False)
+    address = db.Column(db.String, nullable=False)
+
+    sales_calls = db.relationship("SalesCall", back_populates="customer", cascade="all, delete-orphan")
+    opportunities = db.relationship("Opportunity", secondary=customer_opportunity, back_populates="customers")
+
+    serialize_rules = ('-sales_calls.customer', '-opportunities.customers')
+
+    def to_dict_custom(self, depth=1):
+        if depth <= 0:
+            return {'id': self.id, 'name': self.name, 'email': self.email, 'phone': self.phone, 'address': self.address}
+        return {
+            'id': self.id,
+            'name': self.name,
+            'email': self.email,
+            'phone': self.phone,
+            'address': self.address,
+            'sales_calls': [sc.to_dict_custom(depth - 1) for sc in self.sales_calls],
+            'opportunities': [op.to_dict_custom(depth - 1) for op in self.opportunities]
+        }
+
+    def __repr__(self):
+        return f"<Customer: {self.name}>"
+
 class SalesCall(db.Model, SerializerMixin):
     __tablename__ = "sales_calls"
 
@@ -46,13 +82,15 @@ class SalesCall(db.Model, SerializerMixin):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     rating_id = db.Column(db.Integer, db.ForeignKey("ratings.id"), nullable=False)
     stage_id = db.Column(db.Integer, db.ForeignKey("stages.id"), nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
 
     user = db.relationship("User", back_populates="sales_calls")
     rating = db.relationship("Rating", back_populates="sales_calls")
     stage = db.relationship("Stage", back_populates="sales_calls")
+    customer = db.relationship("Customer", back_populates="sales_calls")
     opportunities = db.relationship("Opportunity", back_populates="sales_call", cascade='all, delete-orphan')
 
-    serialize_rules = ('-user.sales_calls', '-rating.sales_calls', '-stage.sales_calls')
+    serialize_rules = ('-user.sales_calls', '-rating.sales_calls', '-stage.sales_calls', '-customer.sales_calls')
 
     def to_dict_custom(self, depth=1):
         if depth <= 0:
@@ -64,11 +102,12 @@ class SalesCall(db.Model, SerializerMixin):
             'user': self.user.to_dict_custom(depth - 1) if self.user else None,
             'rating': self.rating.to_dict_custom(depth - 1) if self.rating else None,
             'stage': self.stage.to_dict_custom(depth - 1) if self.stage else None,
+            'customer': self.customer.to_dict_custom(depth - 1) if self.customer else None,
             'opportunities': [op.to_dict_custom(depth - 1) for op in self.opportunities]
         }
 
     def __repr__(self):
-        return f"<SalesCall: {self.date}, User: {self.user_id}, Rating: {self.rating_id}, Stage: {self.stage_id}>"
+        return f"<SalesCall: {self.date}, User: {self.user_id}, Rating: {self.rating_id}, Stage: {self.stage_id}, Customer: {self.customer_id}>"
 
 class Rating(db.Model, SerializerMixin):
     __tablename__ = "ratings"
@@ -120,11 +159,13 @@ class Opportunity(db.Model, SerializerMixin):
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String, nullable=False)
     sales_call_id = db.Column(db.Integer, db.ForeignKey("sales_calls.id"), nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
 
     sales_call = db.relationship("SalesCall", back_populates="opportunities")
+    customers = db.relationship("Customer", secondary=customer_opportunity, back_populates="opportunities")
     users = db.relationship("User", secondary=user_opportunity, back_populates="opportunities")
 
-    serialize_rules = ('-sales_call.opportunities', '-users.opportunities')
+    serialize_rules = ('-sales_call.opportunities', '-users.opportunities', '-customers.opportunities')
 
     def to_dict_custom(self, depth=1):
         if depth <= 0:
@@ -133,7 +174,8 @@ class Opportunity(db.Model, SerializerMixin):
             'id': self.id,
             'description': self.description,
             'sales_call': self.sales_call.to_dict_custom(depth - 1) if self.sales_call else None,
-            'users': [user.to_dict_custom(depth - 1) for user in self.users]
+            'users': [user.to_dict_custom(depth - 1) for user in self.users],
+            'customers': [customer.to_dict_custom(depth - 1) for customer in self.customers]
         }
 
     def __repr__(self):

@@ -4,7 +4,7 @@ from flask_restful import Resource, Api
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_mail import Mail, Message
-from models import User, SalesCall, Rating, Stage, Opportunity, db
+from models import User, SalesCall, Rating, Stage, Opportunity, Customer, db
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.environ.get("DB_URI", f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}")
@@ -40,6 +40,7 @@ class SalesCalls(Resource):
         data = request.get_json()
         new_call = SalesCall(
             user_id=data['user_id'],
+            customer_id=data['customer_id'],
             date=data['date'],
             notes=data['notes'],
             rating_id=data['rating_id'],
@@ -93,6 +94,8 @@ class Users(Resource):
         db.session.commit()
         return make_response(jsonify(new_user.to_dict_custom()), 201)
 
+api.add_resource(Users, '/users')
+
 class UserById(Resource):
     def get(self, id):
         user = User.query.get(id)
@@ -117,7 +120,6 @@ class UserById(Resource):
         db.session.commit()
         return make_response('', 204)
 
-api.add_resource(Users, '/users')
 api.add_resource(UserById, '/users/<int:id>')
 
 class Ratings(Resource):
@@ -134,6 +136,8 @@ class Ratings(Resource):
         db.session.commit()
         return make_response(jsonify(new_rating.to_dict_custom()), 201)
 
+api.add_resource(Ratings, '/ratings')
+
 class RatingById(Resource):
     def get(self, id):
         rating = Rating.query.get(id)
@@ -141,7 +145,6 @@ class RatingById(Resource):
             return make_response({"error": "Rating not found"}, 404)
         return make_response(jsonify(rating.to_dict_custom()), 200)
 
-api.add_resource(Ratings, '/ratings')
 api.add_resource(RatingById, '/ratings/<int:id>')
 
 class Stages(Resource):
@@ -158,6 +161,8 @@ class Stages(Resource):
         db.session.commit()
         return make_response(jsonify(new_stage.to_dict_custom()), 201)
 
+api.add_resource(Stages, '/stages')
+
 class StageById(Resource):
     def get(self, id):
         stage = Stage.query.get(id)
@@ -165,7 +170,6 @@ class StageById(Resource):
             return make_response({"error": "Stage not found"}, 404)
         return make_response(jsonify(stage.to_dict_custom()), 200)
 
-api.add_resource(Stages, '/stages')
 api.add_resource(StageById, '/stages/<int:id>')
 
 class Opportunities(Resource):
@@ -177,11 +181,14 @@ class Opportunities(Resource):
         data = request.get_json()
         new_opportunity = Opportunity(
             description=data['description'],
-            sales_call_id=data['sales_call_id']
+            sales_call_id=data['sales_call_id'],
+            customer_id=data['customer_id']
         )
         db.session.add(new_opportunity)
         db.session.commit()
         return make_response(jsonify(new_opportunity.to_dict_custom()), 201)
+
+api.add_resource(Opportunities, '/opportunities')
 
 class OpportunityById(Resource):
     def get(self, id):
@@ -201,9 +208,51 @@ class UserOpportunities(Resource):
         db.session.commit()
         return make_response(jsonify(user.to_dict_custom()), 200)
 
-api.add_resource(Opportunities, '/opportunities')
 api.add_resource(OpportunityById, '/opportunities/<int:id>')
 api.add_resource(UserOpportunities, '/users/<int:user_id>/opportunities')
+
+class Customers(Resource):
+    def get(self):
+        customers = [customer.to_dict_custom() for customer in Customer.query.all()]
+        return make_response(jsonify(customers), 200)
+    
+    def post(self):
+        data = request.get_json()
+        new_customer = Customer(
+            name=data['name'],
+            user_id=data['user_id']
+        )
+        db.session.add(new_customer)
+        db.session.commit()
+        return make_response(jsonify(new_customer.to_dict_custom()), 201)
+
+api.add_resource(Customers, '/customers')
+
+class CustomerById(Resource):
+    def get(self, id):
+        customer = Customer.query.get(id)
+        if not customer:
+            return make_response({"error": "Customer not found"}, 404)
+        return make_response(jsonify(customer.to_dict_custom()), 200)
+
+    def patch(self, id):
+        customer = Customer.query.get(id)
+        if not customer:
+            return make_response({"error": "Customer not found"}, 404)
+        for attr in request.get_json():
+            setattr(customer, attr, request.get_json()[attr])
+        db.session.commit()
+        return make_response(jsonify(customer.to_dict_custom()), 200)
+
+    def delete(self, id):
+        customer = Customer.query.get(id)
+        if not customer:
+            return make_response({"error": "Customer not found"}, 404)
+        db.session.delete(customer)
+        db.session.commit()
+        return make_response('', 204)
+
+api.add_resource(CustomerById, '/customers/<int:id>')
 
 @app.route('/send_email', methods=['POST'])
 def send_email():
@@ -218,6 +267,17 @@ def send_email():
     )
     mail.send(msg)
     return make_response(jsonify({"message": "Email sent"}), 200)
+
+@app.route('/customers', methods=['POST'])
+def add_customer():
+    data = request.get_json()
+    new_customer = Customer(
+        name=data['name'],
+        user_id=data['user_id']
+    )
+    db.session.add(new_customer)
+    db.session.commit()
+    return jsonify(new_customer.to_dict_custom()), 201
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
