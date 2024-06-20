@@ -1,10 +1,11 @@
-import os
-from flask import Flask, make_response, jsonify, request
+from flask import Flask, make_response, jsonify, request, session
 from flask_restful import Resource, Api
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_mail import Mail, Message
 from models import User, SalesCall, Rating, Stage, Opportunity, Customer, db
+from werkzeug.security import check_password_hash
+import os
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.environ.get("DB_URI", f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}")
@@ -19,17 +20,32 @@ app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL', 'false').lower() in 
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
+app.secret_key = os.environ.get('SECRET_KEY', 'mysecretkey')
 app.json.compact = False
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app)
+CORS(app, supports_credentials=True)
 api = Api(app)
 mail = Mail(app)
 
 @app.route("/")
 def index():
     return "<h1>Sales Tracker</h1>"
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    if user and check_password_hash(user.password_hash, data['password']):
+        session['user_id'] = user.id
+        return jsonify({'id': user.id, 'username': user.username, 'email': user.email})
+    return make_response(jsonify({"error": "Unauthorized"}), 401)
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.pop('user_id', None)
+    return jsonify({"message": "Logged out"}), 200
 
 class SalesCalls(Resource):
     def get(self):
@@ -121,6 +137,16 @@ class UserById(Resource):
         return make_response('', 204)
 
 api.add_resource(UserById, '/users/<int:id>')
+
+class UserCustomers(Resource):
+    def get(self, user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return make_response(jsonify({"error": "User not found"}), 404)
+        customers = [customer.to_dict_custom() for customer in user.customers]
+        return make_response(jsonify(customers), 200)
+
+api.add_resource(UserCustomers, '/users/<int:user_id>/customers')
 
 class Ratings(Resource):
     def get(self):
@@ -250,7 +276,7 @@ class CustomerById(Resource):
             return make_response({"error": "Customer not found"}, 404)
         db.session.delete(customer)
         db.session.commit()
-        return make_response('', 204)
+        return '', 204
 
 api.add_resource(CustomerById, '/customers/<int:id>')
 
@@ -278,6 +304,53 @@ def add_customer():
     db.session.add(new_customer)
     db.session.commit()
     return jsonify(new_customer.to_dict_custom()), 201
+
+@app.route('/customers/<int:id>', methods=['GET', 'PATCH', 'DELETE'])
+def customer_by_id(id):
+    customer = Customer.query.get(id)
+    if not customer:
+        return jsonify({"error": "Customer not found"}), 404
+
+    if request.method == 'GET':
+        return jsonify(customer.to_dict_custom()), 200
+
+    if request.method == 'PATCH':
+        data = request.get_json()
+        for key, value in data.items():
+            setattr(customer, key, value)
+        db.session.commit()
+        return jsonify(customer.to_dict_custom()), 200
+
+    if request.method == 'DELETE':
+        db.session.delete(customer)
+        db.session.commit()
+        return '', 204
+    
+@app.route('/sales_calls/<int:id>', methods=['PATCH'])
+def update_sales_call(id):
+    sales_call = SalesCall.query.get(id)
+    if not sales_call:
+        return jsonify({"error": "Sales Call not found"}), 404
+
+    data = request.get_json()
+    for key, value in data.items():
+        setattr(sales_call, key, value)
+    
+    db.session.commit()
+    return jsonify(sales_call.to_dict_custom()), 200
+
+@app.route('/opportunities/<int:id>', methods=['PATCH'])
+def update_opportunity(id):
+    opportunity = Opportunity.query.get(id)
+    if not opportunity:
+        return jsonify({"error": "Opportunity not found"}), 404
+
+    data = request.get_json()
+    for key, value in data.items():
+        setattr(opportunity, key, value)
+    
+    db.session.commit()
+    return jsonify(opportunity.to_dict_custom()), 200
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
