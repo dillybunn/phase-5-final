@@ -1,70 +1,22 @@
-import React, { useState } from "react";
+import React from "react";
 import { BrowserRouter as Router, Route, Switch } from "react-router-dom";
-import NavBar from "./NavBar";
-import Users from "./Users";
-import SalesCalls from "./SalesCalls";
-import Ratings from "./Ratings";
-import Stages from "./Stages";
-import Opportunities from "./Opportunities";
-import Home from "./Home";
-import LogIn from "./LogIn";
+import { AppProvider } from "./AppContext";
+import Dashboard from "./Dashboard";
+import Login from "./LogIn";
+import CustomerDetails from "./CustomerDetails";
 
 function App() {
-  const [userId, setUserId] = useState("");
-
   return (
-    <Router>
-      <NavBar userId={userId} />
-      <div className="wrapper">
+    <AppProvider>
+      <Router>
         <Switch>
-          <Route exact path="/">
-            {userId ? (
-              <Home userId={userId} />
-            ) : (
-              <LogIn setUserId={setUserId} />
-            )}
-          </Route>
-          <Route exact path="/login">
-            <LogIn setUserId={setUserId} />
-          </Route>
-          <Route exact path="/users">
-            {userId ? (
-              <Users userId={userId} />
-            ) : (
-              <LogIn setUserId={setUserId} />
-            )}
-          </Route>
-          <Route exact path="/sales_calls">
-            {userId ? (
-              <SalesCalls userId={userId} />
-            ) : (
-              <LogIn setUserId={setUserId} />
-            )}
-          </Route>
-          <Route exact path="/ratings">
-            {userId ? (
-              <Ratings userId={userId} />
-            ) : (
-              <LogIn setUserId={setUserId} />
-            )}
-          </Route>
-          <Route exact path="/stages">
-            {userId ? (
-              <Stages userId={userId} />
-            ) : (
-              <LogIn setUserId={setUserId} />
-            )}
-          </Route>
-          <Route exact path="/opportunities">
-            {userId ? (
-              <Opportunities userId={userId} />
-            ) : (
-              <LogIn setUserId={setUserId} />
-            )}
-          </Route>
+          <Route path="/login" component={Login} />
+          <Route path="/dashboard" component={Dashboard} />
+          <Route path="/customers/:customerId" component={CustomerDetails} />
+          <Route path="/" component={Login} />
         </Switch>
-      </div>
-    </Router>
+      </Router>
+    </AppProvider>
   );
 }
 
