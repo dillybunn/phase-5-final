@@ -6,6 +6,7 @@ from flask_mail import Mail, Message
 from models import User, SalesCall, Rating, Stage, Opportunity, Customer, db
 from werkzeug.security import check_password_hash
 import os
+from config import *
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.environ.get("DB_URI", f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}")
@@ -25,7 +26,7 @@ app.json.compact = False
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 api = Api(app)
 mail = Mail(app)
 
@@ -223,6 +224,8 @@ class OpportunityById(Resource):
             return make_response({"error": "Opportunity not found"}, 404)
         return make_response(jsonify(opportunity.to_dict_custom()), 200)
 
+api.add_resource(OpportunityById, '/opportunities/<int:id>')
+
 class UserOpportunities(Resource):
     def post(self, user_id):
         data = request.get_json()
@@ -234,7 +237,6 @@ class UserOpportunities(Resource):
         db.session.commit()
         return make_response(jsonify(user.to_dict_custom()), 200)
 
-api.add_resource(OpportunityById, '/opportunities/<int:id>')
 api.add_resource(UserOpportunities, '/users/<int:user_id>/opportunities')
 
 class Customers(Resource):
@@ -244,8 +246,15 @@ class Customers(Resource):
     
     def post(self):
         data = request.get_json()
+        required_fields = ['name', 'email', 'user_id']
+        missing_fields = [field for field in required_fields if field not in data or data[field] is None]
+
+        if missing_fields:
+            return make_response(jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400)
+
         new_customer = Customer(
             name=data['name'],
+            email=data['email'],
             user_id=data['user_id']
         )
         db.session.add(new_customer)
@@ -294,38 +303,6 @@ def send_email():
     mail.send(msg)
     return make_response(jsonify({"message": "Email sent"}), 200)
 
-@app.route('/customers', methods=['POST'])
-def add_customer():
-    data = request.get_json()
-    new_customer = Customer(
-        name=data['name'],
-        user_id=data['user_id']
-    )
-    db.session.add(new_customer)
-    db.session.commit()
-    return jsonify(new_customer.to_dict_custom()), 201
-
-@app.route('/customers/<int:id>', methods=['GET', 'PATCH', 'DELETE'])
-def customer_by_id(id):
-    customer = Customer.query.get(id)
-    if not customer:
-        return jsonify({"error": "Customer not found"}), 404
-
-    if request.method == 'GET':
-        return jsonify(customer.to_dict_custom()), 200
-
-    if request.method == 'PATCH':
-        data = request.get_json()
-        for key, value in data.items():
-            setattr(customer, key, value)
-        db.session.commit()
-        return jsonify(customer.to_dict_custom()), 200
-
-    if request.method == 'DELETE':
-        db.session.delete(customer)
-        db.session.commit()
-        return '', 204
-    
 @app.route('/sales_calls/<int:id>', methods=['PATCH'])
 def update_sales_call(id):
     sales_call = SalesCall.query.get(id)

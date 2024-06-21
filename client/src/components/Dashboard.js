@@ -9,13 +9,10 @@ function Dashboard() {
 
   useEffect(() => {
     if (userId) {
-      fetch(`http://localhost:5555/users/${userId}/customers`)
-        .then((r) => {
-          if (!r.ok) {
-            throw new Error("Failed to fetch customers");
-          }
-          return r.json();
-        })
+      fetch(`http://localhost:5555/users/${userId}/customers`, {
+        credentials: "include",
+      })
+        .then((r) => r.json())
         .then((data) => setCustomers(data))
         .catch((error) => console.error("Error:", error));
     }
@@ -37,14 +34,6 @@ function Dashboard() {
         {customers.map((customer) => (
           <li key={customer.id}>
             <Link to={`/customers/${customer.id}`}>{customer.name}</Link>
-            {/* <ul>
-              {customer.sales_calls.map((call) => (
-                <li key={call.id}>{call.notes}</li>
-              ))}
-              {customer.opportunities.map((opportunity) => (
-                <li key={opportunity.id}>{opportunity.description}</li>
-              ))}
-            </ul> */}
           </li>
         ))}
       </ul>
