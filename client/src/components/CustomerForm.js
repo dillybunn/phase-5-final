@@ -9,22 +9,23 @@ function CustomerForm({ onAddCustomer }) {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const newCustomer = {
-      name,
-      email,
-      user_id: userId,
-    };
+    console.log("Form Data:", { name, email, user_id: userId });
 
     fetch("http://localhost:5555/customers", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(newCustomer),
+      credentials: "include",
+      body: JSON.stringify({
+        name,
+        email,
+        user_id: userId,
+      }),
     })
       .then((r) => r.json())
-      .then((data) => {
-        onAddCustomer(data);
+      .then((newCustomer) => {
+        onAddCustomer(newCustomer);
         setName("");
         setEmail("");
       })
