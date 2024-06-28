@@ -4,16 +4,11 @@ from sqlalchemy_serializer import SerializerMixin
 from sqlalchemy.ext.hybrid import hybrid_property
 from config import db
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 
 # Association table for the many-to-many relationship between User and Opportunity
 user_opportunity = db.Table('user_opportunity',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
-    db.Column('opportunity_id', db.Integer, db.ForeignKey('opportunities.id'), primary_key=True)
-)
-
-# Association table for the many-to-many relationship between Customer and Opportunity
-customer_opportunity = db.Table('customer_opportunity',
-    db.Column('customer_id', db.Integer, db.ForeignKey('customers.id'), primary_key=True),
     db.Column('opportunity_id', db.Integer, db.ForeignKey('opportunities.id'), primary_key=True)
 )
 
@@ -70,6 +65,12 @@ class SalesCall(db.Model, SerializerMixin):
     opportunities = db.relationship("Opportunity", back_populates="sales_call", cascade='all, delete-orphan')
 
     serialize_rules = ('-user.sales_calls', '-customer.sales_calls', '-rating.sales_calls', '-stage.sales_calls')
+
+    @validates('date')
+    def validate_date(self, key, date):
+        if isinstance(date, str):
+            date = datetime.strptime(date, '%Y-%m-%d').date()
+        return date
 
     def to_dict_custom(self, depth=1):
         if depth <= 0:
@@ -167,12 +168,21 @@ class Customer(db.Model, SerializerMixin):
     name = db.Column(db.String, nullable=False)
     email = db.Column(db.String, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    rating_id = db.Column(db.Integer, db.ForeignKey("ratings.id"))
+    stage_id = db.Column(db.Integer, db.ForeignKey("stages.id"))
 
     user = db.relationship("User", back_populates="customers")
     sales_calls = db.relationship("SalesCall", back_populates="customer", cascade='all, delete-orphan')
     opportunities = db.relationship("Opportunity", back_populates="customer", cascade='all, delete-orphan')
+    rating = db.relationship("Rating")
+    stage = db.relationship("Stage")
 
     serialize_rules = ('-user.customers', '-sales_calls.customer', '-opportunities.customer')
+
+    @validates('email')
+    def validate_email(self, key, address):
+        assert '@' in address, "Provided email address is not valid."
+        return address
 
     def to_dict_custom(self, depth=1):
         if depth <= 0:
@@ -183,7 +193,9 @@ class Customer(db.Model, SerializerMixin):
             'email': self.email,
             'user': self.user.to_dict_custom(depth - 1) if self.user else None,
             'sales_calls': [sc.to_dict_custom(depth - 1) for sc in self.sales_calls],
-            'opportunities': [op.to_dict_custom(depth - 1) for op in self.opportunities]
+            'opportunities': [op.to_dict_custom(depth - 1) for op in self.opportunities],
+            'rating': self.rating.to_dict_custom(depth - 1) if self.rating else None,
+            'stage': self.stage.to_dict_custom(depth - 1) if self.stage else None,
         }
 
     def __repr__(self):
