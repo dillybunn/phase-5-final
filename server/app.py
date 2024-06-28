@@ -7,6 +7,7 @@ from models import User, SalesCall, Rating, Stage, Opportunity, Customer, db
 from werkzeug.security import check_password_hash
 import os
 from config import *
+from datetime import datetime
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.environ.get("DB_URI", f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}")
@@ -49,22 +50,31 @@ def logout():
     return jsonify({"message": "Logged out"}), 200
 
 class SalesCalls(Resource):
-    def get(self):
-        sales_calls = [call.to_dict_custom() for call in SalesCall.query.all()]
-        return make_response(jsonify(sales_calls), 200)
-   
     def post(self):
         data = request.get_json()
-        new_call = SalesCall(
-            user_id=data['user_id'],
-            customer_id=data['customer_id'],
-            date=data['date'],
-            notes=data['notes'],
-            rating_id=data['rating_id'],
-            stage_id=data['stage_id']
-        )
-        db.session.add(new_call)
-        db.session.commit()
+        required_fields = ['user_id', 'customer_id', 'date', 'rating_id', 'stage_id']
+        missing_fields = [field for field in required_fields if field not in data or data[field] is None]
+
+        print(f"Received data: {data}")  # Log the incoming data
+        if missing_fields:
+            print(f"Missing fields: {missing_fields}")  # Log any missing fields
+            return make_response(jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400)
+
+        try:
+            new_call = SalesCall(
+                user_id=data['user_id'],
+                customer_id=data['customer_id'],
+                date=datetime.strptime(data['date'], '%Y-%m-%d').date(),
+                notes=data.get('notes', ''),
+                rating_id=data['rating_id'],
+                stage_id=data['stage_id']
+            )
+            db.session.add(new_call)
+            db.session.commit()
+        except Exception as e:
+            print(f"Error: {str(e)}") 
+            return make_response(jsonify({"error": str(e)}), 400)
+
         return make_response(jsonify(new_call.to_dict_custom()), 201)
 
 api.add_resource(SalesCalls, '/sales_calls')
@@ -105,7 +115,7 @@ class Users(Resource):
         new_user = User(
             username=data['username'],
             email=data['email'],
-            password_hash=data['password_hash']
+            password_hash=generate_password_hash(data['password'])
         )
         db.session.add(new_user)
         db.session.commit()
@@ -206,13 +216,26 @@ class Opportunities(Resource):
     
     def post(self):
         data = request.get_json()
-        new_opportunity = Opportunity(
-            description=data['description'],
-            sales_call_id=data['sales_call_id'],
-            customer_id=data['customer_id']
-        )
-        db.session.add(new_opportunity)
-        db.session.commit()
+        required_fields = ['description', 'customer_id', 'sales_call_id']
+        missing_fields = [field for field in required_fields if field not in data or data[field] is None]
+
+        print(f"Received data: {data}")  # Log the incoming data
+        if missing_fields:
+            print(f"Missing fields: {missing_fields}")  # Log any missing fields
+            return make_response(jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400)
+
+        try:
+            new_opportunity = Opportunity(
+                description=data['description'],
+                sales_call_id=int(data['sales_call_id']),
+                customer_id=int(data['customer_id'])
+            )
+            db.session.add(new_opportunity)
+            db.session.commit()
+        except Exception as e:
+            print(f"Error: {str(e)}")  # Log any exceptions
+            return make_response(jsonify({"error": str(e)}), 400)
+
         return make_response(jsonify(new_opportunity.to_dict_custom()), 201)
 
 api.add_resource(Opportunities, '/opportunities')
@@ -223,6 +246,23 @@ class OpportunityById(Resource):
         if not opportunity:
             return make_response({"error": "Opportunity not found"}, 404)
         return make_response(jsonify(opportunity.to_dict_custom()), 200)
+
+    def patch(self, id):
+        opportunity = Opportunity.query.get(id)
+        if not opportunity:
+            return make_response({"error": "Opportunity not found"}, 404)
+        for attr in request.get_json():
+            setattr(opportunity, attr, request.get_json()[attr])
+        db.session.commit()
+        return make_response(jsonify(opportunity.to_dict_custom()), 200)
+
+    def delete(self, id):
+        opportunity = Opportunity.query.get(id)
+        if not opportunity:
+            return make_response({"error": "Opportunity not found"}, 404)
+        db.session.delete(opportunity)
+        db.session.commit()
+        return '', 204
 
 api.add_resource(OpportunityById, '/opportunities/<int:id>')
 
@@ -302,32 +342,6 @@ def send_email():
     )
     mail.send(msg)
     return make_response(jsonify({"message": "Email sent"}), 200)
-
-@app.route('/sales_calls/<int:id>', methods=['PATCH'])
-def update_sales_call(id):
-    sales_call = SalesCall.query.get(id)
-    if not sales_call:
-        return jsonify({"error": "Sales Call not found"}), 404
-
-    data = request.get_json()
-    for key, value in data.items():
-        setattr(sales_call, key, value)
-    
-    db.session.commit()
-    return jsonify(sales_call.to_dict_custom()), 200
-
-@app.route('/opportunities/<int:id>', methods=['PATCH'])
-def update_opportunity(id):
-    opportunity = Opportunity.query.get(id)
-    if not opportunity:
-        return jsonify({"error": "Opportunity not found"}), 404
-
-    data = request.get_json()
-    for key, value in data.items():
-        setattr(opportunity, key, value)
-    
-    db.session.commit()
-    return jsonify(opportunity.to_dict_custom()), 200
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)

@@ -55,15 +55,15 @@ if __name__ == '__main__':
         # Create Customers
         print("Creating customers...")
         customers = [
-            Customer(name="Customer A", email="customerA@example.com", user_id=users[0].id),
-            Customer(name="Customer B", email="customerB@example.com", user_id=users[0].id),
-            Customer(name="Customer C", email="customerC@example.com", user_id=users[0].id),
-            Customer(name="Customer D", email="customerD@example.com", user_id=users[1].id),
-            Customer(name="Customer E", email="customerE@example.com", user_id=users[1].id),
-            Customer(name="Customer F", email="customerF@example.com", user_id=users[1].id),
-            Customer(name="Customer G", email="customerG@example.com", user_id=users[2].id),
-            Customer(name="Customer H", email="customerH@example.com", user_id=users[2].id),
-            Customer(name="Customer I", email="customerI@example.com", user_id=users[2].id)
+            Customer(name="Customer A", email="customerA@example.com", user_id=users[0].id, rating_id=ratings[0].id, stage_id=stages[0].id),
+            Customer(name="Customer B", email="customerB@example.com", user_id=users[0].id, rating_id=ratings[1].id, stage_id=stages[1].id),
+            Customer(name="Customer C", email="customerC@example.com", user_id=users[0].id, rating_id=ratings[2].id, stage_id=stages[2].id),
+            Customer(name="Customer D", email="customerD@example.com", user_id=users[1].id, rating_id=ratings[3].id, stage_id=stages[3].id),
+            Customer(name="Customer E", email="customerE@example.com", user_id=users[1].id, rating_id=ratings[0].id, stage_id=stages[0].id),
+            Customer(name="Customer F", email="customerF@example.com", user_id=users[1].id, rating_id=ratings[1].id, stage_id=stages[1].id),
+            Customer(name="Customer G", email="customerG@example.com", user_id=users[2].id, rating_id=ratings[2].id, stage_id=stages[2].id),
+            Customer(name="Customer H", email="customerH@example.com", user_id=users[2].id, rating_id=ratings[3].id, stage_id=stages[3].id),
+            Customer(name="Customer I", email="customerI@example.com", user_id=users[2].id, rating_id=ratings[0].id, stage_id=stages[0].id)
         ]
         db.session.add_all(customers)
         db.session.commit()
